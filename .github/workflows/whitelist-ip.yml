@@ -1,19 +1,16 @@
 name: Whitelist My IP in AWS Security Group
 
 on:
-  workflow_dispatch:
-    inputs:
-      security_group_id:
-        description: "AWS Security Group ID"
-        required: true
-      port:
-        description: "Port to whitelist (default: 27017)"
-        required: false
-        default: "27017"
+  workflow_dispatch:  # allows manual trigger
 
 jobs:
   whitelist:
     runs-on: ubuntu-latest
+
+    env:
+      SG_ID: sg-0a12b34cd5678ef90   # 🔒 your Security Group ID
+      PORT: 27017                   # 🔒 the port you want to open (e.g., MongoDB)
+      REGION: ap-south-1            # 🔒 your AWS region
 
     steps:
       - name: Get public IP
@@ -27,14 +24,30 @@ jobs:
         run: |
           aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws configure set region ${{ secrets.AWS_REGION }}
+          aws configure set region $REGION
 
-      - name: Whitelist the IP
+      - name: Remove old IPs (optional cleanup)
         run: |
-          echo "Adding IP $IP/32 to SG ${{ github.event.inputs.security_group_id }} for port ${{ github.event.inputs.port }}"
+          echo "Removing old IPs from SG $SG_ID for port $PORT..."
+          OLD_IPS=$(aws ec2 describe-security-groups \
+            --group-ids $SG_ID \
+            --query "SecurityGroups[0].IpPermissions[?FromPort==\`${PORT}\`].IpRanges[].CidrIp" \
+            --output text)
+          for CIDR in $OLD_IPS; do
+            echo "Revoking old rule: $CIDR"
+            aws ec2 revoke-security-group-ingress \
+              --group-id $SG_ID \
+              --protocol tcp \
+              --port $PORT \
+              --cidr "$CIDR" || true
+          done
+
+      - name: Whitelist new IP
+        run: |
+          echo "Adding new IP: $IP/32 to SG $SG_ID for port $PORT"
           aws ec2 authorize-security-group-ingress \
-            --group-id ${{ github.event.inputs.security_group_id }} \
+            --group-id $SG_ID \
             --protocol tcp \
-            --port ${{ github.event.inputs.port }} \
+            --port $PORT \
             --cidr "$IP/32" \
             || echo "⚠️ IP may already exist or rule already added."
