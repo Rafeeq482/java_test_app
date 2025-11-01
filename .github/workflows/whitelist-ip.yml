@@ -1,0 +1,40 @@
+name: Whitelist My IP in AWS Security Group
+
+on:
+  workflow_dispatch:
+    inputs:
+      security_group_id:
+        description: "AWS Security Group ID"
+        required: true
+      port:
+        description: "Port to whitelist (default: 27017)"
+        required: false
+        default: "27017"
+
+jobs:
+  whitelist:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get public IP
+        id: ip
+        run: |
+          IP=$(curl -s https://checkip.amazonaws.com)
+          echo "Public IP: $IP"
+          echo "IP=$IP" >> $GITHUB_ENV
+
+      - name: Configure AWS CLI
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws configure set region ${{ secrets.AWS_REGION }}
+
+      - name: Whitelist the IP
+        run: |
+          echo "Adding IP $IP/32 to SG ${{ github.event.inputs.security_group_id }} for port ${{ github.event.inputs.port }}"
+          aws ec2 authorize-security-group-ingress \
+            --group-id ${{ github.event.inputs.security_group_id }} \
+            --protocol tcp \
+            --port ${{ github.event.inputs.port }} \
+            --cidr "$IP/32" \
+            || echo "⚠️ IP may already exist or rule already added."
