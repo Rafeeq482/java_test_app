@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SG_ID: sg-0a12b34cd5678ef90   # 🔒 your Security Group ID
+      SG_ID: sg-0e5b0fef93890d82a   # 🔒 your Security Group ID
       PORT: 27017                   # 🔒 the port you want to open (e.g., MongoDB)
       REGION: ap-south-1            # 🔒 your AWS region
 
